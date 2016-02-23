@@ -126,8 +126,11 @@ def emit_stmt(ctx, stmt, fd, level, prev_kwd_class, next_stmt,
         fd.write(newlines_before * '\n')
 
     kwd_class = get_kwd_class(stmt.keyword)
-    if not ctx.opts.yang_keep_blank_lines and \
-       ((level == 1 and
+    # WL these two lines are in master
+    #if not ctx.opts.yang_keep_blank_lines and \
+    #   ((level == 1 and
+    # WL this line is my code
+    if ((level == 1 and not ctx.opts.yang_keep_blank_lines and
          kwd_class != prev_kwd_class and kwd_class != 'extension') or
         stmt.keyword in _keyword_with_trailing_newline):
         fd.write('\n')
