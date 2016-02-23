@@ -7,6 +7,7 @@ from . import util
 from . import statements
 from . import syntax
 import collections
+import copy
 import sys
 
 class YangTokenizer(object):
@@ -102,7 +103,6 @@ class YangTokenizer(object):
                     cmt += '\n'+self.buf.replace('\n','')
                     i = self.buf.find('*/')
                 self.set_buf(i+2)
-            self.skip()
             return cmt
 
     def get_keyword(self):
@@ -273,7 +273,17 @@ class YangParser(object):
             self.tokenizer = YangTokenizer(text, self.pos, ctx.errors,
                                            ctx.max_line_len, ctx.keep_comments,
                                            not ctx.lax_quote_checks)
-            stmt = self._parse_statement(None)
+            # WL this line in master
+            #stmt = self._parse_statement(None)
+            # WL is replaced with this
+            root = statements.Statement(self.top, None, self.pos, '_root')
+            while True:
+                try:
+                    self.tokenizer.peek()
+                except error.Eof:
+                    break
+                self._parse_statement(root)
+            # WL end
         except error.Abort:
             return None
         except error.Eof as e:
@@ -283,16 +293,20 @@ class YangParser(object):
             # we expect a error.Eof at this point, everything else is an error
             self.tokenizer.peek()
         except error.Eof:
-            return stmt
+            return root.search_one('module') or root.search_one('submodule')
         except:
             pass
         error.err_add(self.ctx.errors, self.pos, 'TRAILING_GARBAGE', ())
         return None
 
     def _parse_statement(self, parent):
+        pos_begin = copy.copy(self.pos)
+
         # modification: when the --keep-comments flag is provided,
         # we would like to see if a statement is a comment, and if so
         # treat it differently than we treat keywords further down
+        keywd = None
+        arg = None
         if self.ctx.keep_comments:
            cmt = self.tokenizer.get_comment()
            if cmt != None:
@@ -314,25 +328,48 @@ class YangParser(object):
         if keywd == 'yang-version' and arg == '1.1':
             self.tokenizer.is_1_1 = True;
             self.tokenizer.strict_quoting = True
+        # WL this code was in my version (after if self.ctx.keep_commands:)
+        #   keywd = '_comment'
+        #   arg = self.tokenizer.get_comment()
+
+        #if arg is None:
+        #   keywd = self.tokenizer.get_keyword()
+        #   # check for argument
+        #   tok = self.tokenizer.peek()
+        #   if tok == '{' or tok == ';':
+        #       arg = None
+        #   else:
+        #       arg = self.tokenizer.get_string()
+        #   # check for YANG 1.1
+        #   if keywd == 'yang-version' and arg == '1.1':
+        #       self.tokenizer.strict_quoting = True
+        #
+        # WL end
         stmt = statements.Statement(self.top, parent, self.pos, keywd, arg)
-        if self.top is None:
-            self.pos.top = stmt
-            self.top = stmt
+        stmt.pos_begin = copy.copy(pos_begin)
+        if keywd == 'module' or keywd == 'submodule':
+            stmt.parent = None
+            if self.top is None:
+                self.pos.top = stmt
+                self.top = stmt
+        parent.substmts.append(stmt)
 
         # check for substatements
-        tok = self.tokenizer.peek()
-        if tok == '{':
-            self.tokenizer.skip_tok() # skip the '{'
-            while self.tokenizer.peek() != '}':
-                substmt = self._parse_statement(stmt)
-                stmt.substmts.append(substmt)
-            self.tokenizer.skip_tok() # skip the '}'
-        elif tok == ';':
-            self.tokenizer.skip_tok() # skip the ';'
-        else:
-            error.err_add(self.ctx.errors, self.pos, 'INCOMPLETE_STATEMENT',
-                          (keywd, tok))
-            raise error.Abort
+        if keywd != '_comment':
+            tok = self.tokenizer.peek()
+            if tok == '{':
+                self.tokenizer.skip_tok() # skip the '{'
+                while self.tokenizer.peek() != '}':
+                    self._parse_statement(stmt)
+                self.tokenizer.skip_tok() # skip the '}'
+            elif tok == ';':
+                self.tokenizer.skip_tok() # skip the ';'
+            else:
+                error.err_add(self.ctx.errors, self.pos,
+                              'INCOMPLETE_STATEMENT', (keywd, tok))
+                raise error.Abort
+
+        stmt.pos_end = copy.copy(self.pos)
         return stmt
 
 # FIXME: tmp debug
