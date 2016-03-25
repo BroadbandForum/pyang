@@ -125,6 +125,15 @@ def emit_stmt(ctx, stmt, fd, level, prev_kwd_class, next_stmt,
     if newlines_before > 0:
         fd.write(newlines_before * '\n')
 
+    # XXX is this safe? parent is clearly manipulated by augment etc; better
+    #     to pass it in as (yet another) argument?
+    prev_stmt = stmt.parent \
+                if stmt.parent and stmt.parent.substmts[0] is stmt else None
+    newlines_before = get_newlines_before(prev_stmt, stmt) \
+                      if ctx.opts.yang_keep_blank_lines else 0
+    if newlines_before > 0:
+        fd.write(newlines_before * '\n')
+
     kwd_class = get_kwd_class(stmt.keyword)
     # WL these two lines are in master
     #if not ctx.opts.yang_keep_blank_lines and \
@@ -228,6 +237,7 @@ def emit_arg_squote(keyword, arg, fd, indent, indentstep, max_line_len):
     # XXX strictly num_chars could be negative, e.g. if max_line_len is VERY
     #     small; should check for this
     num_chars = len(arg) - (line_len - max_line_len)
+    # WL these two lines are my code?
     while num_chars > 2 and arg[num_chars-1:num_chars].isalnum():
         num_chars -= 1
     fd.write(" " + quote + arg[:num_chars] + quote)
@@ -237,6 +247,7 @@ def emit_arg_squote(keyword, arg, fd, indent, indentstep, max_line_len):
         line_len = len("%s%s %s%s%s%s" % (indent, keyword_cont,
                                           quote, arg, quote, term))
         num_chars = len(arg) - (line_len - max_line_len)
+        # WL these two lines are my code?
         while num_chars > 2 and arg[num_chars-1:num_chars].isalnum():
             num_chars -= 1
         fd.write('\n' + indent + keyword_cont + " " +
@@ -295,6 +306,16 @@ def need_quote(arg):
     return False
 
 # WL this is my code
+def get_newlines_before(prev_stmt, this_stmt):
+    newlines_before = 0
+    if prev_stmt and prev_stmt.pos and this_stmt.pos_begin:
+        prev_stmt_line = prev_stmt.pos.line
+        this_stmt_begin_line = this_stmt.pos_begin.line
+        newlines_before = this_stmt_begin_line - prev_stmt_line
+        if newlines_before > 0:
+            newlines_before -= 1
+    return newlines_before
+
 def get_newlines_before(prev_stmt, this_stmt):
     newlines_before = 0
     if prev_stmt and prev_stmt.pos and this_stmt.pos_begin:
