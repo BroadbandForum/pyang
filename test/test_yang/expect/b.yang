@@ -1,4 +1,5 @@
-// comment before module statement (single blank line after)
+// comment before module statement
+
 module a {
   namespace "urn:a";
   prefix a;
@@ -36,7 +37,5 @@ module a {
     // the container is y
     container y;
     container bar;
-  }
-
-  // trailing comment
+  } // trailing comment
 }
